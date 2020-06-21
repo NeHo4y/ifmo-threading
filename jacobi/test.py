@@ -44,7 +44,7 @@ def generate(system_rank):
         A[row][row] = np.sum(np.abs(A[row])) - np.abs(A[row][row]) + np.random.rand() * 2 + 2
     q = np.linalg.norm(B)
     print(q)
-    return np.concatenate((X, B, A)), A, B.flatten()
+    return np.concatenate((X, B, A))
 
 
 def generate_system(rank):
@@ -63,13 +63,14 @@ def generate_system(rank):
             break
     parameters[2:] = A
     print(f"q = {q}")
-    return parameters, parameters[2:], parameters[1]
+    return parameters
 
 
 def verify_system_solved(A, b):
     x = np.expand_dims(np.fromfile("linear.output", sep=" "), axis=1)
     ax = np.dot(A, x)
     ax = ax.flatten()
+
     correct = all(abs(ax - b) <= precision)
     if not correct:
         raise Exception("Solution incorrect")
@@ -78,13 +79,18 @@ def verify_system_solved(A, b):
 def benchmark_system_with_processes_count(processes_count) -> float:
     print(f"Benchmarking {processes_count} processes")
 
-    start = time.time()
+    duration = 0
     for i in range(iterations):
-        exit_code = subprocess.call(["mpiexec", "-n", str(processes_count), EXECUTABLE])
-        assert exit_code == 0
+        process = subprocess.Popen(["mpiexec", "-n", str(processes_count), EXECUTABLE], stdout=subprocess.PIPE)
+        line = process.stdout.readline()
+        duration += float(line)
+        process.communicate()[0]
+        assert (process.returncode == 0)
     finish = time.time()
-    duration = (finish - start) / iterations
-    print("Duration: %.2f seconds" % duration)
+    duration = duration / iterations
+    if duration < 10e-6:
+        duration = 10e-6
+    print("Duration: %f seconds" % duration)
     return duration
 
 
