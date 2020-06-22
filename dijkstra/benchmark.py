@@ -3,17 +3,19 @@ import numpy as np
 import subprocess
 import matplotlib.pyplot as plt
 import random
-EXECUTABLE = "./cpp/cmake-build-release/dijkstra"
+EXECUTABLE = "./cpp/cmake-build-debug/dijkstra"
 
 sizes = (500, 1000, 5_000, 10_000, 20000)
+
 
 iterations = 10
 
 launch_types = {
     0: "serial",
     1: "static schedule",
-    2: "dynamic schedule"
+    2: "dynamic schedule static batch"
 }
+
 
 benchmarks = {
     launch_type: {size: None for size in sizes}

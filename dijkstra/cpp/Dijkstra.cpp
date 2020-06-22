@@ -79,6 +79,44 @@ void Dijkstra::sequentalDijkstra() {
 
 }
 
+void Dijkstra::parallelDynamicDijkstra() {
+    std::vector<int> distances(size, std::numeric_limits<int>::max());
+    std::vector<bool> used(size);
+    auto batch = 256;
+    if (size < 2000) {
+        batch = 64;
+    }
+    distances[start] = 0;
+    for (int step = 0; step < size - 1; ++step) {
+        auto min_value_index_pair = std::make_pair<>(std::numeric_limits<int>::max(), 0);
+#pragma omp declare reduction \
+        (min_index_reduction : decltype(min_value_index_pair) : omp_out = std::min(omp_out, omp_in)) \
+        initializer(omp_priv = { std::numeric_limits<int>::max(), 0 })
+
+#pragma omp parallel for schedule(dynamic, batch) reduction(min_index_reduction: min_value_index_pair)
+        for (auto j = 0; j < distances.size(); j++) {
+            if (!used[j] && (distances[j] <= min_value_index_pair.first)) {
+                min_value_index_pair = {distances[j], j};
+            }
+        }
+        auto min_index = min_value_index_pair.second;
+        if (distances[min_index] == std::numeric_limits<int>::max()) {
+            break;
+        }
+        used[min_index] = true;
+#pragma omp parallel for schedule(dynamic, batch)
+        for (auto j = 0; j < this->graph[min_index].size(); j++) {
+
+            auto weight = this->graph[min_index][j];
+            if (weight == 0) { continue; }
+            auto relaxed_dist = distances[min_index] + weight;
+            if (!used[j] && relaxed_dist < distances[j])
+                distances[j] = relaxed_dist;
+        }
+    }
+    std::copy(distances.begin(), distances.end(), this->distances.begin());
+}
+
 void Dijkstra::parallelStaticDijkstra() {
     std::vector<int> distances(size, std::numeric_limits<int>::max());
     std::vector<bool> used(size);
@@ -113,38 +151,3 @@ void Dijkstra::parallelStaticDijkstra() {
     }
     std::copy(distances.begin(), distances.end(), this->distances.begin());
 }
-
-void Dijkstra::parallelDynamicDijkstra() {
-    std::vector<int> distances(size, std::numeric_limits<int>::max());
-    std::vector<bool> used(size);
-    distances[start] = 0;
-    for (int step = 0; step < size - 1; ++step) {
-        auto min_value_index_pair = std::make_pair<>(std::numeric_limits<int>::max(), 0);
-#pragma omp declare reduction \
-        (min_index_reduction : decltype(min_value_index_pair) : omp_out = std::min(omp_out, omp_in)) \
-        initializer(omp_priv = { std::numeric_limits<int>::max(), 0 })
-
-#pragma omp parallel for schedule(dynamic) reduction(min_index_reduction: min_value_index_pair)
-        for (auto j = 0; j < distances.size(); j++) {
-            if (!used[j] && (distances[j] <= min_value_index_pair.first)) {
-                min_value_index_pair = {distances[j], j};
-            }
-        }
-        auto min_index = min_value_index_pair.second;
-        if (distances[min_index] == std::numeric_limits<int>::max()) {
-            break;
-        }
-        used[min_index] = true;
-#pragma omp parallel for schedule(dynamic)
-        for (auto j = 0; j < this->graph[min_index].size(); j++) {
-
-            auto weight = this->graph[min_index][j];
-            if (weight == 0) { continue; }
-            auto relaxed_dist = distances[min_index] + weight;
-            if (!used[j] && relaxed_dist < distances[j])
-                distances[j] = relaxed_dist;
-        }
-    }
-    std::copy(distances.begin(), distances.end(), this->distances.begin());
-}
-
